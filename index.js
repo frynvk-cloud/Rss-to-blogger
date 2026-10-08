@@ -1,7 +1,7 @@
 const Parser = require('rss-parser');
 const fs = require('fs');
 
-const RSS_FEED_URL = "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en";
+const RSS_FEED_URL = "https://google.com";
 const BLOG_ID = "1761503376493247689";
 const LAST_LINK_FILE = 'last_link.txt';
 
@@ -16,23 +16,30 @@ async function obterAccessToken() {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      refresh_token: REFRESH_TOKEN,
+      client_id: CLIENT_ID || "",
+      client_secret: CLIENT_SECRET || "",
+      refresh_token: REFRESH_TOKEN || "",
       grant_type: "refresh_token"
     })
   });
   
-  const dados = await resposta.json();
-  if (!dados.access_token) {
-    throw new Error("Falha ao renovar o token: " + JSON.stringify(dados));
+  // Captura o texto puro para depurar caso o Google rejeite as credenciais
+  const textoResposta = await resposta.text();
+  
+  try {
+    const dados = JSON.parse(textoResposta);
+    if (!dados.access_token) {
+      throw new Error("Resposta do Google sem access_token: " + textoResposta);
+    }
+    return dados.access_token;
+  } catch (e) {
+    throw new Error(`O Google rejeitou suas credenciais e retornou um erro. Resposta bruta:\n${textoResposta}`);
   }
-  return dados.access_token;
 }
 
 async function run() {
   try {
-    // 1. Baixar o Feed RSS como texto primeiro (evita o bug do caractere &)
+    // 1. Baixar o Feed RSS como texto primeiro
     const respostaRss = await fetch(RSS_FEED_URL);
     const textoXml = await respostaRss.text();
 
@@ -45,7 +52,7 @@ async function run() {
       return;
     }
 
-    const ultimoItem = feed.items[0]; // Correção: Pegar o índice 0 explicitamente
+    const ultimoItem = feed.items[0];
     const titulo = ultimoItem.title;
     const link = ultimoItem.link;
     const descricao = ultimoItem.content || ultimoItem.snippet || "";
@@ -87,7 +94,7 @@ async function run() {
     });
 
     if (respostaBlogger.status === 200 || respostaBlogger.status === 201) {
-      console.log(`Sucesso! Post "${titulo}" publicado.`);
+      console.log(`Sucesso! Post "${titulo}" published.`);
       fs.writeFileSync(LAST_LINK_FILE, link, 'utf8');
     } else {
       const erroTexto = await respostaBlogger.text();
@@ -95,7 +102,7 @@ async function run() {
     }
 
   } catch (error) {
-    console.error("Erro crítico na execução:", error);
+    console.error("Erro crítico na execução:", error.message || error);
     process.exit(1);
   }
 }
