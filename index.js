@@ -9,20 +9,19 @@ const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 
 async function obterAccessToken() {
-  // URL oficial e atualizada para renovação de tokens do Google OAuth2
+  // URL universal do endpoint de tokens do Google
   const url = "https://googleapis.com";
   
-  const corpoRequisicao = {
-    client_id: CLIENT_ID ? CLIENT_ID.trim() : "",
-    client_secret: CLIENT_SECRET ? CLIENT_SECRET.trim() : "",
-    refresh_token: REFRESH_TOKEN ? REFRESH_TOKEN.trim() : "",
-    grant_type: "refresh_token"
-  };
+  const params = new URLSearchParams();
+  params.append('client_id', CLIENT_ID ? CLIENT_ID.trim() : "");
+  params.append('client_secret', CLIENT_SECRET ? CLIENT_SECRET.trim() : "");
+  params.append('refresh_token', REFRESH_TOKEN ? REFRESH_TOKEN.trim() : "");
+  params.append('grant_type', 'refresh_token');
 
   const resposta = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(corpoRequisicao)
+    body: params.toString()
   });
   
   const textoResposta = await resposta.text();
@@ -44,7 +43,6 @@ function extrairTag(texto, tag) {
   if (!correspondencia || !correspondencia[1]) return "";
   
   let resultado = correspondencia[1].trim();
-  // Limpa blocos CDATA se existirem no texto extraído
   resultado = resultado.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '\$1');
   return resultado;
 }
@@ -55,7 +53,6 @@ async function run() {
     const respostaRss = await fetch(RSS_FEED_URL);
     const textoXml = await respostaRss.text();
 
-    // Isolar o primeiro bloco <item> do feed
     const itemMatch = textoXml.match(/<item[^>]*>([\s\(\S\)]*?)<\/item>/i);
     if (!itemMatch || !itemMatch[1]) {
       console.log("Aviso: Nenhum item <item> foi encontrado no XML do feed.");
