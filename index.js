@@ -1,4 +1,3 @@
-const Parser = require('rss-parser');
 const fs = require('fs');
 
 const RSS_FEED_URL = "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en";
@@ -23,7 +22,6 @@ async function obterAccessToken() {
     })
   });
   
-  // Captura o texto puro para depurar caso o Google rejeite as credenciais
   const textoResposta = await resposta.text();
   
   try {
@@ -33,29 +31,40 @@ async function obterAccessToken() {
     }
     return dados.access_token;
   } catch (e) {
-    throw new Error(`O Google rejeitou suas credenciais e retornou um erro. Resposta bruta:\n${textoResposta}`);
+    throw new Error(`O Google rejeitou suas credenciais. Resposta bruta:\n${textoResposta}`);
   }
+}
+
+// Função auxiliar para extrair o conteúdo de tags XML via RegEx de forma segura
+function extrairTag(texto, tag) {
+  const regex = new RegExp(`<${tag}[^>]*>([\s\S]*?)<\/${tag}>`, 'i');
+  const correspondencia = texto.match(regex);
+  return correspondencia ? correspondencia[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '\$1').trim() : "";
 }
 
 async function run() {
   try {
-    // 1. Baixar o Feed RSS como texto primeiro
+    // 1. Baixar o Feed RSS do Google News como texto puro
     const respostaRss = await fetch(RSS_FEED_URL);
     const textoXml = await respostaRss.text();
 
-    // 2. Analisar o conteúdo XML obtido
-    const parser = new Parser();
-    const feed = await parser.parseString(textoXml);
-    
-    if (!feed.items || feed.items.length === 0) {
+    // 2. Isolar o primeiro bloco <item> do XML (a notícia mais recente)
+    const itemMatch = textoXml.match(/<item[^>]*>([\s\(\S\)]*?)<\/item>/i);
+    if (!itemMatch) {
       console.log("Nenhum item encontrado no feed RSS.");
       return;
     }
+    const primeiroItemXml = itemMatch[1];
 
-    const ultimoItem = feed.items[0];
-    const titulo = ultimoItem.title;
-    const link = ultimoItem.link;
-    const descricao = ultimoItem.content || ultimoItem.snippet || "";
+    // Extrair os dados usando nossa função customizada imune a bugs do '&'
+    const titulo = extrairTag(primeiroItemXml, 'title');
+    const link = extrairTag(primeiroItemXml, 'link');
+    const descricao = extrairTag(primeiroItemXml, 'description');
+
+    if (!link) {
+      console.log("Não foi possível extrair o link da notícia.");
+      return;
+    }
 
     // 3. Controlar duplicidade localmente no GitHub
     let ultimoLinkPostado = '';
@@ -68,10 +77,10 @@ async function run() {
       return;
     }
 
-    // 4. Pegar um Access Token temporário e válido
+    // 4. Pegar o Access Token temporário do Google
     const accessToken = await obterAccessToken();
 
-    // 5. Estruturar o post
+    // 5. Estruturar o post em HTML
     const corpoPostHtml = `
       <div>${descricao}</div>
       <br />
@@ -94,7 +103,7 @@ async function run() {
     });
 
     if (respostaBlogger.status === 200 || respostaBlogger.status === 201) {
-      console.log(`Sucesso! Post "${titulo}" published.`);
+      console.log(`Sucesso! Post "${titulo}" publicado.`);
       fs.writeFileSync(LAST_LINK_FILE, link, 'utf8');
     } else {
       const erroTexto = await respostaBlogger.text();
