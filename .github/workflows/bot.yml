@@ -2,8 +2,8 @@ name: Executar Bot Blogger RSS
 
 on:
   schedule:
-    - cron: '0 * * * *' # Roda a cada 1 hora automaticamente
-  workflow_dispatch: # Permite rodar manualmente clicando em um botão no GitHub
+    - cron: '0 * * * *' # Roda automaticamente de 1 em 1 hora
+  workflow_dispatch: # Permite que você clique no botão para testar manualmente pelo celular
 
 jobs:
   build:
@@ -31,7 +31,7 @@ jobs:
     - name: Salvar o estado do último link postado
       run: |
         git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        git config --global user.email 'github-actions[bot]@://github.com'
         git add last_link.txt
         git diff --quiet && git diff --staged --quiet || git commit -m "Atualiza último link postado [skip ci]"
         git push
