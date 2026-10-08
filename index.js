@@ -1,7 +1,7 @@
 const Parser = require('rss-parser');
 const fs = require('fs');
 
-const RSS_FEED_URL = "https://google.com";
+const RSS_FEED_URL = "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en";
 const BLOG_ID = "1761503376493247689";
 const LAST_LINK_FILE = 'last_link.txt';
 
