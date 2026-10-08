@@ -4,7 +4,6 @@ const RSS_FEED_URL = "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en";
 const BLOG_ID = "1761503376493247689";
 const LAST_LINK_FILE = 'last_link.txt';
 
-// Dados de autenticação vindos dos segredos do GitHub
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
@@ -35,59 +34,61 @@ async function obterAccessToken() {
   }
 }
 
-// Função auxiliar para extrair o conteúdo de tags XML via RegEx de forma segura
 function extrairTag(texto, tag) {
-  const regex = new RegExp(`<${tag}[^>]*>([\s\S]*?)<\/${tag}>`, 'i');
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
   const correspondencia = texto.match(regex);
-  return correspondencia ? correspondencia[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '\$1').trim() : "";
+  if (!correspondencia) return "";
+  // Limpa blocos CDATA se existirem
+  return correspondencia[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '\$1').trim();
 }
 
 async function run() {
   try {
-    // 1. Baixar o Feed RSS do Google News como texto puro
+    console.log("Iniciando a busca no feed RSS...");
     const respostaRss = await fetch(RSS_FEED_URL);
     const textoXml = await respostaRss.text();
 
-    // 2. Isolar o primeiro bloco <item> do XML (a notícia mais recente)
+    // Isolar o primeiro bloco <item>
     const itemMatch = textoXml.match(/<item[^>]*>([\s\(\S\)]*?)<\/item>/i);
     if (!itemMatch) {
-      console.log("Nenhum item encontrado no feed RSS.");
+      console.log("Aviso: Nenhum item <item> foi encontrado no XML do feed.");
       return;
     }
+    
+    // CORREÇÃO: Pega o grupo capturado [1] em vez do array completo [0]
     const primeiroItemXml = itemMatch[1];
 
-    // Extrair os dados usando nossa função customizada imune a bugs do '&'
     const titulo = extrairTag(primeiroItemXml, 'title');
     const link = extrairTag(primeiroItemXml, 'link');
     const descricao = extrairTag(primeiroItemXml, 'description');
 
+    console.log(`Notícia identificada:\nTítulo: ${titulo}\nLink: ${link}`);
+
     if (!link) {
-      console.log("Não foi possível extrair o link da notícia.");
+      console.log("Aviso: Não foi possível extrair a URL de dentro da tag <link>.");
       return;
     }
 
-    // 3. Controlar duplicidade localmente no GitHub
     let ultimoLinkPostado = '';
     if (fs.existsSync(LAST_LINK_FILE)) {
       ultimoLinkPostado = fs.readFileSync(LAST_LINK_FILE, 'utf8').trim();
     }
 
     if (ultimoLinkPostado === link) {
-      console.log("A notícia mais recente já foi publicada anteriormente.");
+      console.log("Bloqueio Anti-Duplicidade: Esta notícia já foi publicada na rodada anterior.");
       return;
     }
 
-    // 4. Pegar o Access Token temporário do Google
+    console.log("Renovando token de acesso do Google...");
     const accessToken = await obterAccessToken();
 
-    // 5. Estruturar o post em HTML
     const corpoPostHtml = `
       <div>${descricao}</div>
       <br />
       <p><em>Read the full story on Google News: <a href="${link}" target="_blank">Click here</a></em></p>
     `;
 
-    // 6. Enviar para a API do Blogger
+    console.log("Enviando postagem para o Blogger...");
     const apiUrl = `https://googleapis.com{BLOG_ID}/posts/`;
     
     const respostaBlogger = await fetch(apiUrl, {
@@ -103,11 +104,12 @@ async function run() {
     });
 
     if (respostaBlogger.status === 200 || respostaBlogger.status === 201) {
-      console.log(`Sucesso! Post "${titulo}" publicado.`);
+      console.log(`Sucesso Total! Post "${titulo}" publicado no Blogger.`);
       fs.writeFileSync(LAST_LINK_FILE, link, 'utf8');
+      console.log("Arquivo last_link.txt atualizado com o novo link.");
     } else {
       const erroTexto = await respostaBlogger.text();
-      console.error(`Erro na API do Blogger (Status ${respostaBlogger.status}):`, erroTexto);
+      console.error(`Erro retornado pela API do Blogger (Status ${respostaBlogger.status}):`, erroTexto);
     }
 
   } catch (error) {
