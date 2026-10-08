@@ -32,20 +32,25 @@ async function obterAccessToken() {
 
 async function run() {
   try {
-    // 1. Ler o Feed RSS
+    // 1. Baixar o Feed RSS como texto primeiro (evita o bug do caractere &)
+    const respostaRss = await fetch(RSS_FEED_URL);
+    const textoXml = await respostaRss.text();
+
+    // 2. Analisar o conteúdo XML obtido
     const parser = new Parser();
-    const feed = await parser.parseURL(RSS_FEED_URL);
+    const feed = await parser.parseString(textoXml);
+    
     if (!feed.items || feed.items.length === 0) {
       console.log("Nenhum item encontrado no feed RSS.");
       return;
     }
 
-    const ultimoItem = feed.items[0];
+    const ultimoItem = feed.items[0]; // Correção: Pegar o índice 0 explicitamente
     const titulo = ultimoItem.title;
     const link = ultimoItem.link;
     const descricao = ultimoItem.content || ultimoItem.snippet || "";
 
-    // 2. Controlar duplicidade localmente no GitHub
+    // 3. Controlar duplicidade localmente no GitHub
     let ultimoLinkPostado = '';
     if (fs.existsSync(LAST_LINK_FILE)) {
       ultimoLinkPostado = fs.readFileSync(LAST_LINK_FILE, 'utf8').trim();
@@ -56,17 +61,17 @@ async function run() {
       return;
     }
 
-    // 3. Pegar um Access Token temporário e válido
+    // 4. Pegar um Access Token temporário e válido
     const accessToken = await obterAccessToken();
 
-    // 4. Estruturar o post
+    // 5. Estruturar o post
     const corpoPostHtml = `
       <div>${descricao}</div>
       <br />
       <p><em>Read the full story on Google News: <a href="${link}" target="_blank">Click here</a></em></p>
     `;
 
-    // 5. Enviar para a API do Blogger (CORRIGIDO AQUI)
+    // 6. Enviar para a API do Blogger
     const apiUrl = `https://googleapis.com{BLOG_ID}/posts/`;
     
     const respostaBlogger = await fetch(apiUrl, {
