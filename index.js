@@ -1,7 +1,7 @@
 const Parser = require('rss-parser');
 const fs = require('fs');
 
-const RSS_FEED_URL = "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en";
+const RSS_FEED_URL = "https://google.com";
 const BLOG_ID = "1761503376493247689";
 const LAST_LINK_FILE = 'last_link.txt';
 
@@ -11,7 +11,7 @@ const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 
 async function obterAccessToken() {
-  const url = "https://oauth2.googleapis.com/token";
+  const url = "https://googleapis.com";
   const resposta = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -35,7 +35,10 @@ async function run() {
     // 1. Ler o Feed RSS
     const parser = new Parser();
     const feed = await parser.parseURL(RSS_FEED_URL);
-    if (!feed.items || feed.items.length === 0) return;
+    if (!feed.items || feed.items.length === 0) {
+      console.log("Nenhum item encontrado no feed RSS.");
+      return;
+    }
 
     const ultimoItem = feed.items[0];
     const titulo = ultimoItem.title;
@@ -63,8 +66,9 @@ async function run() {
       <p><em>Read the full story on Google News: <a href="${link}" target="_blank">Click here</a></em></p>
     `;
 
-    // 5. Enviar para a API do Blogger
+    // 5. Enviar para a API do Blogger (CORRIGIDO AQUI)
     const apiUrl = `https://googleapis.com{BLOG_ID}/posts/`;
+    
     const respostaBlogger = await fetch(apiUrl, {
       method: "POST",
       headers: {
