@@ -9,16 +9,20 @@ const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 
 async function obterAccessToken() {
+  // URL oficial e atualizada para renovação de tokens do Google OAuth2
   const url = "https://googleapis.com";
+  
+  const corpoRequisicao = {
+    client_id: CLIENT_ID ? CLIENT_ID.trim() : "",
+    client_secret: CLIENT_SECRET ? CLIENT_SECRET.trim() : "",
+    refresh_token: REFRESH_TOKEN ? REFRESH_TOKEN.trim() : "",
+    grant_type: "refresh_token"
+  };
+
   const resposta = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: CLIENT_ID || "",
-      client_secret: CLIENT_SECRET || "",
-      refresh_token: REFRESH_TOKEN || "",
-      grant_type: "refresh_token"
-    })
+    body: new URLSearchParams(corpoRequisicao)
   });
   
   const textoResposta = await resposta.text();
@@ -26,20 +30,23 @@ async function obterAccessToken() {
   try {
     const dados = JSON.parse(textoResposta);
     if (!dados.access_token) {
-      throw new Error("Resposta do Google sem access_token: " + textoResposta);
+      throw new Error("Resposta sem token: " + textoResposta);
     }
     return dados.access_token;
   } catch (e) {
-    throw new Error(`O Google rejeitou suas credenciais. Resposta bruta:\n${textoResposta}`);
+    throw new Error(`O Google rejeitou suas credenciais.\nVerifique se os Secrets do GitHub não possuem espaços extras.\nResposta bruta do Google:\n${textoResposta}`);
   }
 }
 
 function extrairTag(texto, tag) {
   const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i');
   const correspondencia = texto.match(regex);
-  if (!correspondencia) return "";
-  // Limpa blocos CDATA se existirem
-  return correspondencia[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '\$1').trim();
+  if (!correspondencia || !correspondencia[1]) return "";
+  
+  let resultado = correspondencia[1].trim();
+  // Limpa blocos CDATA se existirem no texto extraído
+  resultado = resultado.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '\$1');
+  return resultado;
 }
 
 async function run() {
@@ -48,14 +55,13 @@ async function run() {
     const respostaRss = await fetch(RSS_FEED_URL);
     const textoXml = await respostaRss.text();
 
-    // Isolar o primeiro bloco <item>
+    // Isolar o primeiro bloco <item> do feed
     const itemMatch = textoXml.match(/<item[^>]*>([\s\(\S\)]*?)<\/item>/i);
-    if (!itemMatch) {
+    if (!itemMatch || !itemMatch[1]) {
       console.log("Aviso: Nenhum item <item> foi encontrado no XML do feed.");
       return;
     }
     
-    // CORREÇÃO: Pega o grupo capturado [1] em vez do array completo [0]
     const primeiroItemXml = itemMatch[1];
 
     const titulo = extrairTag(primeiroItemXml, 'title');
